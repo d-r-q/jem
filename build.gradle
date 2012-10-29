@@ -1,0 +1,24 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+}
+
+apply plugin: 'scala'
+
+repositories {
+    mavenRepo name: 'GAE', urls:'http://maven-gae-plugin.googlecode.com/svn/repository'
+    mavenCentral()
+}
+
+configurations.runtime.exclude(group: 'ch.qos.logback')
+
+dependencies {
+
+    scalaTools 'org.scala-lang:scala-compiler:2.9.2',
+               'org.scala-lang:scala-library:2.9.2'
+
+    compile 'org.scala-lang:scala-library:2.9.2',
+            'com.google.appengine:appengine-api-1.0-sdk:1.7.2',
+            'com.google.code.gson:gson:2.2.2'
+}
