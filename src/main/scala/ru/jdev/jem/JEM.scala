@@ -2,6 +2,6 @@ import com.google.appengine.api.datastore.DatastoreServiceFactory
 
 object JEM {
 
-    private val dataStore = DatastoreServiceFactory.getDatastoreService()
+    private def dataStore = DatastoreServiceFactory.getDatastoreService()
 
 }
