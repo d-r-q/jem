@@ -5,20 +5,43 @@ buildscript {
 }
 
 apply plugin: 'scala'
+apply plugin: "groovy"
+
+group = 'ru.jdev' 
+version = '0.1.0'
+
+targetCompatibility = "1.6"
+sourceCompatibility = "1.6"
+
+buildDir = relativePath(System.properties['user.home'] + '/builds/jem')
 
 repositories {
-    mavenRepo name: 'GAE', urls:'http://maven-gae-plugin.googlecode.com/svn/repository'
     mavenCentral()
 }
 
-configurations.runtime.exclude(group: 'ch.qos.logback')
-
 dependencies {
 
-    scalaTools 'org.scala-lang:scala-compiler:2.9.2',
-               'org.scala-lang:scala-library:2.9.2'
+    groovy "org.codehaus.groovy:groovy-all:2.0.5"
 
-    compile 'org.scala-lang:scala-library:2.9.2',
-            'com.google.appengine:appengine-api-1.0-sdk:1.7.2',
-            'com.google.code.gson:gson:2.2.2'
+    scalaTools 'org.scala-lang:scala-compiler:2.9.2',
+            'org.scala-lang:scala-library:2.9.2'
+
+    compile 'com.google.appengine:appengine-api-1.0-sdk:1.7.3',
+            'com.google.code.gson:gson:2.2.2',
+            'org.scala-lang:scala-library:2.9.2'
+
+    testCompile 'org.spockframework:spock-core:0.7-groovy-2.0',
+            'com.google.appengine:appengine-testing:1.7.3',
+            'com.google.appengine:appengine-api-labs:1.7.3',
+            'com.google.appengine:appengine-api-stubs:1.7.3'
+}
+
+uploadArchives { 
+
+    repositories { 
+        ivy { 
+            url System.properties['user.home'] + '/.localIvy' 
+        } 
+    }
+
 }
