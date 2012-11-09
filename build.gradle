@@ -1,3 +1,7 @@
+final USER_HOME = System.properties['user.home']
+final LOCAL_REPOSITORY = "${USER_HOME}/.localIvy"
+final JAVA_VERSION = "1.6"
+
 buildscript {
     repositories {
         mavenCentral()
@@ -7,13 +11,13 @@ buildscript {
 apply plugin: 'scala'
 apply plugin: "groovy"
 
-group = 'ru.jdev' 
+group = 'ru.jdev'
 version = '0.1.0'
 
-targetCompatibility = "1.6"
-sourceCompatibility = "1.6"
+targetCompatibility = JAVA_VERSION
+sourceCompatibility = JAVA_VERSION
 
-buildDir = relativePath(System.properties['user.home'] + '/builds/jem')
+buildDir = relativePath("${USER_HOME}/builds/jem")
 
 repositories {
     mavenCentral()
@@ -36,12 +40,26 @@ dependencies {
             'com.google.appengine:appengine-api-stubs:1.7.3'
 }
 
-uploadArchives { 
+uploadArchives {
 
-    repositories { 
-        ivy { 
-            url System.properties['user.home'] + '/.localIvy' 
-        } 
+    repositories {
+        ivy {
+
+            url LOCAL_REPOSITORY
+            layout 'pattern', {
+                final artifactDir = '[organization]/[module]'
+                artifact "${artifactDir}/[artifact]-[revision].[ext]"
+                ivy "${artifactDir}/ivy.xml"
+            }
+
+        }
     }
 
+}
+
+uploadArchives.doFirst {
+    final artifact = "${LOCAL_REPOSITORY}/${project.group}/${project.name}/${project.name}-${version}.jar"
+    if (new File(artifact).exists()) {
+        throw new GradleException("Artifact ${artifact} already exist")
+    }
 }
