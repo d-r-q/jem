@@ -40,6 +40,8 @@ dependencies {
             'com.google.appengine:appengine-api-stubs:1.7.3'
 }
 
+compileTestGroovy.dependsOn compileTestScala
+
 uploadArchives {
 
     repositories {

@@ -8,7 +8,7 @@ import com.google.appengine.api.datastore
 import datastore.KeyFactory.Builder
 import java.util.{Map => JMap}
 
-class JEM(cfg: Set[String]) {
+class JEM(cfg: scala.collection.Iterable[String]) {
 
   private val setters: Map[String, ((Entity, String, JsonElement) => Unit)] = (cfg map setter).toMap
 
