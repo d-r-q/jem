@@ -1,6 +1,6 @@
 final USER_HOME = System.properties['user.home']
 final LOCAL_REPOSITORY = "${USER_HOME}/.localIvy"
-final JAVA_VERSION = "1.6"
+final JAVA_VERSION = '1.6'
 
 buildscript {
     repositories {
@@ -9,7 +9,7 @@ buildscript {
 }
 
 apply plugin: 'scala'
-apply plugin: "groovy"
+apply plugin: 'groovy'
 
 group = 'ru.jdev'
 version = '0.1.0'
@@ -25,7 +25,7 @@ repositories {
 
 dependencies {
 
-    groovy "org.codehaus.groovy:groovy-all:2.0.5"
+    groovy 'org.codehaus.groovy:groovy-all:2.0.5'
 
     scalaTools 'org.scala-lang:scala-compiler:2.9.2',
             'org.scala-lang:scala-library:2.9.2'
