@@ -29,8 +29,8 @@ class JemTest extends Specification {
 
         when: "Empty json object is stored"
 
-            final jem = new JEM(SList([]), "id")
-            final key = jem.store(new JsonParser().parse("{}").asJsonObject, "User", null)
+            final jem = new JEM(SList([]), "id", "Test")
+            final key = jem.store(new JsonParser().parse("{}").asJsonObject, null, "Test")
 
         then: "It can be retreived by it's key and do not have properties"
 
@@ -43,8 +43,8 @@ class JemTest extends Specification {
 
         when: "Json object with 'arr' property of array type is stored"
 
-            final jem = new JEM(SList(["arr"]), "id")
-            final key = jem.store(new JsonParser().parse("{\"arr\": [\"1\", \"2\", \"3\"]}").asJsonObject, "User", null)
+            final jem = new JEM(SList(["arr"]), "id", "Test")
+            final key = jem.store(new JsonParser().parse("{\"arr\": [\"1\", \"2\", \"3\"]}").asJsonObject, null, "Test")
 
         then: "It can be retreived by it's key and do have 'arr' property with 3 elements"
 
@@ -63,8 +63,8 @@ class JemTest extends Specification {
 
         when: "Json object with 'arr' property of array of arrays type is stored"
 
-            final jem = new JEM(SList(["arr"]), "id")
-            jem.store(new JsonParser().parse("{\"arr\": [[\"1\"], [\"2\"], [\"3\"]]}").asJsonObject, "User", null)
+            final jem = new JEM(SList(["arr"]), "id", "Test")
+            jem.store(new JsonParser().parse("{\"arr\": [[\"1\"], [\"2\"], [\"3\"]]}").asJsonObject, null, "Test")
 
         then: "IllegalArgumentException must be throwned"
 
@@ -87,8 +87,8 @@ class JemTest extends Specification {
                 }
             """
 
-            final jem = new JEM(SList(["indexedProp", "indexedArr", "indexedObj"]), "id")
-            final key = jem.store(new JsonParser().parse(json).asJsonObject, "User", null)
+            final jem = new JEM(SList(["indexedProp", "indexedArr", "indexedObj"]), "id", "Test")
+            final key = jem.store(new JsonParser().parse(json).asJsonObject, null, "Test")
 
         then: "They must be retreived"
 
@@ -124,16 +124,16 @@ class JemTest extends Specification {
 
     def "Storing and loading simple object"() {
 
-        final jem = new JEM(SList(["indexedProp"]), "id")
+        final jem = new JEM(SList(["indexedProp"]), "id", "Test")
         def key
 
         when: "Simple object is stored"
 
-            key = jem.store(new JsonParser().parse('{"indexedProp":"indexedProp","unindexedProp":"unindexedProp"}').asJsonObject, "User", null)
+            key = jem.store(new JsonParser().parse('{"indexedProp":"indexedProp","unindexedProp":"unindexedProp"}').asJsonObject, null, "Test")
 
         then: "It can be loaded by it's key"
 
-            def jsonObjOpt = jem.load(key.getId(), "User", null)
+            def jsonObjOpt = jem.load(key.getId(), null, "Test")
 
             jsonObjOpt instanceof Some
             def jsonObj = jsonObjOpt.get()

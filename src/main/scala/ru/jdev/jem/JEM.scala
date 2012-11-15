@@ -6,103 +6,103 @@ import com.google.appengine.api.datastore.{Entity, Key, DatastoreServiceFactory,
 import com.google.gson._
 import com.google.appengine.api.datastore
 import datastore.KeyFactory.Builder
-import java.util.{Map => JMap}
 import java.util
+import scala.Predef._
+import scala.AnyRef
+import scala.Some
+import collection.immutable
 
-class JEM(cfg: scala.collection.Iterable[String], val idPropertyName: String = "_id") {
+class JEM(val indexedFields: Iterable[String], val kind: String = null, val idPropertyName: String = "_id") {
 
-  private val entitySetters: Map[String, ((Entity, String, JsonElement) => Unit)] = (cfg map entitySetter).toMap
-
-  private val jsonSetters: Map[String, ((JsonObject, String, Entity) => Unit)] = (cfg map jsonSetter).toMap
+  private type FieldSetter[Src, Dst] = (Src, Dst, String) => Unit
+  private type EntityFieldSetter = FieldSetter[JsonObject, Entity]
+  private type JsonFieldSetter = FieldSetter[Entity, JsonObject]
 
   private val gson = new Gson
 
-  private def dataStore = DatastoreServiceFactory.getDatastoreService
+  private val (entitySetters, jsonSetters) = {
+    val entityUnindexedSetter =
+      (source: JsonObject, dest: Entity, key: String) =>
+        dest.setUnindexedProperty(key, source.get(key).toString)
 
-  def store(obj: JsonObject, kind: String, parent: Key): Key = {
-    val builder = new Builder(parent)
-    val entity = obj.get(idPropertyName) match {
-      case id: JsonPrimitive if id.isNumber => dataStore.get(builder.addChild(kind, id.getAsLong).getKey)
+    val entityIndexedSetter =
+      (source: JsonObject, dest: Entity, key: String) =>
+        dest.setProperty(key, getEntityProperty(dest.getKey)(source.get(key)))
+
+    val jsonUnindexedSetter =
+      (source: Entity, dest: JsonObject, key: String) =>
+        dest.add(key, new JsonParser().parse(source.getProperty(key).asInstanceOf[String]))
+
+    val jsonIndexedSetter =
+      (source: Entity, dest: JsonObject, key: String) =>
+        dest.add(key, getJsonProperty(source.getKey)(source.getProperty(key)))
+
+    (indexedFields.zip(Stream.continually(entityIndexedSetter)).toMap.withDefaultValue(entityUnindexedSetter),
+      indexedFields.zip(Stream.continually(jsonIndexedSetter)).toMap.withDefaultValue(jsonUnindexedSetter))
+  }
+
+  def store(jsonObj: JsonObject, parent: Key = null, kind: String = kind): Key = {
+    val entity = jsonObj.get(idPropertyName) match {
+      case id: JsonPrimitive if id.isNumber => getEntityByKey(parent, kind, id.getAsLong)
       case null => {
         val newEntity: Entity = new Entity(kind, parent)
         dataStore.put(newEntity)
         newEntity
       }
-      case _ => throw new IllegalArgumentException("Invalid _id value = " + gson.toJson(obj.get(idPropertyName)))
+      case _ => throw new IllegalArgumentException("Invalid id value = " + gson.toJson(jsonObj.get(idPropertyName)))
     }
 
-    obj.entrySet().foreach((entry: JMap.Entry[String, JsonElement]) => {
-      entitySetters.getOrElse(entry.getKey, entityUnindexedSetter _)(entity, entry.getKey, entry.getValue)
-    })
-
-    dataStore.put(entity)
+    dataStore.put(copyJsonProperties(jsonObj, entity))
   }
 
+  def load(id: Long, parent: Key = null, kind: String = kind): Option[JsonObject] = getEntityByKey(parent, kind, id) match {
+    case entity: Entity => Some(copyEntityProperties(entity))
+    case null => None
+  }
+
+  def load(query: Query) = dataStore.prepare(query).asIterable map(copyEntityProperties(_))
+
+  private def dataStore = DatastoreServiceFactory.getDatastoreService
+
+  private def getEntityByKey(parent: Key, kind: String, id: Long) = dataStore.get(new Builder(parent).addChild(kind, id).getKey)
+
+  private def copyProperties[Src, Dst](setters: immutable.Map[String, FieldSetter[Src, Dst]])(src: Src, dst: Dst, names: TraversableOnce[String]) =
+    names.foldLeft(dst) {
+      (dst: Dst, name: String) => {
+        setters(name)(src, dst, name)
+        dst
+      }
+    }
+
+  private def copyEntityProperties(src: Entity) =
+    copyProperties[Entity, JsonObject](jsonSetters)(src, new JsonObject, src.getProperties.keySet)
+
+  private def copyJsonProperties(src: JsonObject, dst: Entity) =
+    copyProperties[JsonObject, Entity](entitySetters)(src, dst, src.entrySet().map(_.getKey))
 
   private def getEntityProperty(parent: Key)(value: JsonElement): AnyRef = value match {
+    // TODO: add case and test for null
     case v: JsonPrimitive => v.getAsString
-    case v: JsonObject => store(v, parent.getKind, parent)
-    case v: JsonArray => {
-      val javaList: java.util.List[AnyRef] = v.getAsJsonArray.iterator().map(getEntityProperty(parent)).toList
-      javaList
-    }
+    case v: JsonObject => store(v, parent, parent.getKind)
+    case v: JsonArray => bufferAsJavaList(v.getAsJsonArray.iterator().map(getEntityProperty(parent)).toBuffer)
 
     case _ => throw new IllegalArgumentException("Unsupported value: " + value)
   }
 
-  private def entityIndexedSetter(entity: Entity, key: String, value: JsonElement) {
-    entity.setProperty(key, getEntityProperty(entity.getKey)(value))
-  }
-
-  private def entityUnindexedSetter(entity: Entity, key: String, value: JsonElement) {
-    entity.setUnindexedProperty(key, value.toString)
-  }
-
-  private def entitySetter(field: String): (String, ((Entity, String, JsonElement) => Unit)) = (field, entityIndexedSetter)
-
-  def load(id: Long, kind: String, parent: Key): Option[JsonObject] =
-    convertEntityToJson(dataStore.get(new Builder(parent).addChild(kind, id).getKey))
-
-
-  def convertEntityToJson(entity: Entity) = entity match {
-    case entity: Entity => {
-      val jsonObj = new JsonObject
-
-      entity.getProperties.foreach((property: (String, AnyRef)) => {
-        jsonSetters.getOrElse(property._1, jsonUnindexedSetter _)(jsonObj, property._1, entity)
-      })
-
-      Some(jsonObj)
-    }
-
-    case null => None
-  }
-
   private def getJsonProperty(parent: Key)(value: AnyRef): JsonElement = value match {
     case v: String => new JsonPrimitive(v)
-    case v: Key => load(v.getId, parent.getKind, parent) match {
+    case v: Key => load(v.getId, parent, parent.getKind) match {
       case Some(element) => element
-      case None => JsonNull.INSTANCE
+      case None => JsonNull.INSTANCE // TODO: consistency problem?
     }
     case v: util.Collection[AnyRef] => {
       val res = new JsonArray
-      (v map getJsonProperty(parent)) foreach {
+      v.map(getJsonProperty(parent)).foreach {
         res.add(_)
       }
       res
     }
+    case _ => throw new IllegalArgumentException("Unsupported value: " + value)
   }
-
-  private def jsonIndexedSetter(json: JsonObject, key: String, entity: Entity) {
-    json.add(key, getJsonProperty(entity.getKey)(entity.getProperty(key)))
-  }
-
-  private def jsonUnindexedSetter(json: JsonObject, key: String, value: Entity) {
-    json.add(key, new JsonParser().parse(value.getProperty(key).asInstanceOf[String]))
-  }
-
-  private def jsonSetter(field: String): (String, ((JsonObject, String, Entity) => Unit)) = (field, jsonIndexedSetter)
-
-  def load(query: Query) = dataStore.prepare(query).asIterable() map convertEntityToJson
 
 }
