@@ -15,8 +15,6 @@ import collection.immutable
 class JEM(val indexedFields: Iterable[String], val kind: String = null, val idPropertyName: String = "_id") {
 
   private type FieldSetter[Src, Dst] = (Src, Dst, String) => Unit
-  private type EntityFieldSetter = FieldSetter[JsonObject, Entity]
-  private type JsonFieldSetter = FieldSetter[Entity, JsonObject]
 
   private val gson = new Gson
 
