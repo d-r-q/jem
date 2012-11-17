@@ -10,10 +10,17 @@ import com.google.appengine.api.datastore.DatastoreServiceFactory
 import static ru.jdev.jem.ScalaTestUtils.*
 import com.google.appengine.api.datastore.Key
 import scala.Some
+import scala.collection.immutable.Nil
+import com.google.appengine.api.datastore.KeyFactory
+
+import static ru.jdev.jem.JemCollectionFactory.collectionFor
+import static com.google.appengine.api.datastore.KeyFactory.stringToKey
+import com.google.gson.JsonObject
+import com.google.gson.JsonNull
 
 class JemTest extends Specification {
 
-    static LocalServiceTestHelper helper
+    private static LocalServiceTestHelper helper
 
     def setupSpec() {
 
@@ -29,118 +36,188 @@ class JemTest extends Specification {
 
         when: "Empty json object is stored"
 
-            final jem = new JEM(SList([]), "id", "Test")
-            final key = jem.store(new JsonParser().parse("{}").asJsonObject, null, "Test")
+        final users = collectionFor("User", SList([]), "_id").withoutParent()
+        final key = users.store(new JsonParser().parse("{}").asJsonObject)
 
         then: "It can be retreived by it's key and do not have properties"
 
-            final user = DatastoreServiceFactory.getDatastoreService().get(key)
-            user != null
-            user.properties.size() == 0
+        final user = DatastoreServiceFactory.getDatastoreService().get(stringToKey(key))
+        user != null
+        user.properties.size() == 0
     }
 
     def "Storing a json object with array"() {
 
-        when: "Json object with 'arr' property of array type is stored"
+        when: "Json object with 'roles' property of array type is stored"
 
-            final jem = new JEM(SList(["arr"]), "id", "Test")
-            final key = jem.store(new JsonParser().parse("{\"arr\": [\"1\", \"2\", \"3\"]}").asJsonObject, null, "Test")
+        final rolesField = 'roles'
+        final users = collectionFor('User', SList([rolesField]), '_id').withoutParent()
+        final key = users.store(new JsonParser().parse('{"' + rolesField + '":["user","admin","guest"]}').asJsonObject)
 
         then: "It can be retreived by it's key and do have 'arr' property with 3 elements"
 
-            final user = DatastoreServiceFactory.getDatastoreService().get(key)
-            user != null
-            user.properties.size() == 1
+        final user = DatastoreServiceFactory.getDatastoreService().get(stringToKey(key))
+        user != null
+        user.properties.size() == 1
 
-            user.properties['arr'].size() == 3
+        user.properties[rolesField].size() == 3
 
-            user.properties['arr'][0] == "1"
-            user.properties['arr'][1] == "2"
-            user.properties['arr'][2] == "3"
+        user.properties[rolesField][0] == "user"
+        user.properties[rolesField][1] == "admin"
+        user.properties[rolesField][2] == "guest"
     }
 
     def "Storing a json object with array of arrays"() {
 
-        when: "Json object with 'arr' property of array of arrays type is stored"
+        when: "Json object with 'roles' property of array of arrays type is stored"
 
-            final jem = new JEM(SList(["arr"]), "id", "Test")
-            jem.store(new JsonParser().parse("{\"arr\": [[\"1\"], [\"2\"], [\"3\"]]}").asJsonObject, null, "Test")
+        final rolesField = 'roles'
+        final users = collectionFor('User', SList([rolesField]), '_id').withoutParent()
+        users.store(new JsonParser().parse('{"' + rolesField + '":[[]]}').asJsonObject)
 
         then: "IllegalArgumentException must be throwned"
 
-            thrown IllegalArgumentException
+        thrown IllegalArgumentException
     }
 
     def "Storing a json object with indexed and unindexed properties"() {
 
-        when: "Json object with 'arr' property of array of arrays type is stored"
+        when: "Json object with indexed and unindexed properties is stored"
 
-            final json = """
+        final json = """
                 {
-                    "indexedProp": "indexedProp",
-                    "indexedArr": ["1", "2", "3"],
-                    "indexedObj": { "one": "1", "two": "2", "three": "3", "indexedProp": "4"},
+                    "login": "test",
+                    "roles": ["guest", "user", "admin"],
+                    "config": { "locale": "ru", "remember": "true", "login": "test"},
 
-                    "unindexedProp": "unindexedProp",
-                    "unindexedArr": ["1", "2", "3"],
-                    "unindexedObj": { "one": "1", "two": "2", "three": "3"}
+                    "name": "Test Test",
+                    "interests": ["scala", "gradle"],
+                    "nextTask": { "type": "load", "url": "google.com"}
                 }
             """
 
-            final jem = new JEM(SList(["indexedProp", "indexedArr", "indexedObj"]), "id", "Test")
-            final key = jem.store(new JsonParser().parse(json).asJsonObject, null, "Test")
+        final users = collectionFor("User", SList(["login", "roles", "config"]), "_id").withoutParent()
+        final String key = users.store(new JsonParser().parse(json).asJsonObject)
 
         then: "They must be retreived"
 
-            final user = DatastoreServiceFactory.getDatastoreService().get(key)
-            user != null
-            user.properties.size() == 6
+        final user = DatastoreServiceFactory.getDatastoreService().get(stringToKey(key))
+        user != null
+        user.properties.size() == 6
 
-            user.isUnindexedProperty('unindexedProp')
-            user.isUnindexedProperty('unindexedArr')
-            user.isUnindexedProperty('unindexedObj')
+        user.isUnindexedProperty('name')
+        user.isUnindexedProperty('interests')
+        user.isUnindexedProperty('nextTask')
 
-            user.properties['unindexedProp'] == '"unindexedProp"'
-            user.properties['unindexedArr'] == '["1","2","3"]'
-            user.properties['unindexedObj'] == '{"one":"1","two":"2","three":"3"}'
+        user.properties['name'] == 'Test Test'
+        user.properties['interests'] == ['scala', 'gradle']
+        user.properties['nextTask'] instanceof Key
 
-            !user.isUnindexedProperty('indexedProp')
-            !user.isUnindexedProperty('indexedArr')
-            !user.isUnindexedProperty('indexedObj')
+        final nextTask = DatastoreServiceFactory.getDatastoreService().get(user.properties['nextTask'])
+        nextTask != null
+        nextTask.properties.size() == 2
 
-            user.properties['indexedProp'] == 'indexedProp'
-            user.properties['indexedArr'] == ["1", "2", "3"]
+        nextTask.isUnindexedProperty('type')
+        nextTask.isUnindexedProperty('url')
 
-            user.properties['indexedObj'] instanceof Key
-            final subObj = DatastoreServiceFactory.getDatastoreService().get((Key) user.properties['indexedObj'])
-            subObj != null
-            subObj.properties.size() == 4
+        nextTask.properties['type'] == 'load'
+        nextTask.properties['url'] == 'google.com'
 
-            subObj.properties['one'] == '"1"'
-            subObj.properties['two'] == '"2"'
-            subObj.properties['three'] == '"3"'
-            subObj.properties['indexedProp'] == '4'
+        !user.isUnindexedProperty('login')
+        !user.isUnindexedProperty('roles')
+        !user.isUnindexedProperty('config')
+
+        user.properties['login'] == 'test'
+        user.properties['roles'] == ["guest", "user", "admin"]
+
+        user.properties['config'] instanceof Key
+        final Key cfgKey = user.properties['config'] as Key
+        cfgKey.getKind() == "User.inner"
+        final config = DatastoreServiceFactory.getDatastoreService().get(cfgKey)
+        config != null
+        config.properties.size() == 3
+
+        config.isUnindexedProperty('locale')
+        config.isUnindexedProperty('remember')
+        config.isUnindexedProperty('login')
+
+        config.properties['locale'] == 'ru'
+        config.properties['remember'] == 'true'
+        config.properties['login'] == 'test'
     }
 
     def "Storing and loading simple object"() {
 
-        final jem = new JEM(SList(["indexedProp"]), "id", "Test")
-        def key
+        final users = collectionFor("User", SList(["login"]), "_id").withoutParent()
+        def String key
 
         when: "Simple object is stored"
 
-            key = jem.store(new JsonParser().parse('{"indexedProp":"indexedProp","unindexedProp":"unindexedProp"}').asJsonObject, null, "Test")
+        key = users.store(new JsonParser().parse('{"login":"test","name":"Test Test"}').asJsonObject)
 
         then: "It can be loaded by it's key"
 
-            def jsonObjOpt = jem.load(key.getId(), null, "Test")
+        def jsonObjOpt = users.load(key)
 
-            jsonObjOpt instanceof Some
-            def jsonObj = jsonObjOpt.get()
-            jsonObj.entrySet().size() == 2
+        jsonObjOpt instanceof Some
+        def jsonObj = jsonObjOpt.get()
+        jsonObj.entrySet().size() == 2
 
-            jsonObj.get('indexedProp').getAsString() == 'indexedProp'
-            jsonObj.get('unindexedProp').getAsString() == 'unindexedProp'
+        jsonObj.get('login').getAsString() == 'test'
+        jsonObj.get('name').getAsString() == 'Test Test'
+    }
+
+    def "Storing object with 3 leveles of TBD"() {
+        final roots = collectionFor("Root", SList([]), "_id").withoutParent()
+
+        when: "Object with 3 leveles of TBD is stored"
+        final String key = roots.store(new JsonParser().parse("""{
+        "inner1":{
+            "inner2":{
+                "value":"value"
+            }
+        }
+        }""").asJsonObject)
+
+        then: "Inner objects has same category"
+        final root = DatastoreServiceFactory.getDatastoreService().get(stringToKey(key))
+        root != null
+        root.properties.size() == 1
+        root.isUnindexedProperty('inner1')
+        root.properties['inner1'] instanceof Key
+
+        final inner1Key = root.properties['inner1'] as Key
+        inner1Key.getKind() == "Root.inner"
+        final inner1 = DatastoreServiceFactory.getDatastoreService().get(inner1Key)
+        inner1 != null
+        inner1.properties.size() == 1
+
+        inner1.isUnindexedProperty('inner2')
+        inner1.properties['inner2'] instanceof Key
+
+        final inner2Key = inner1.properties['inner2'] as Key
+        inner2Key.getKind() == "Root.inner"
+        final inner2 = DatastoreServiceFactory.getDatastoreService().get(inner2Key)
+        inner2 != null
+        inner2.properties.size() == 1
+        inner2.isUnindexedProperty('value')
+        inner2.properties['value'] == 'value'
+    }
+
+    def "Storing object with null"() {
+        final roots = collectionFor("Root", SList([]), "_id").withoutParent()
+        when: "Object with property set to null is stored"
+        final String key = roots.store(new JsonParser().parse('{"nullProp":null}').asJsonObject)
+
+        then: "It must be retreived as JsonNull object"
+        final rootOpt = roots.load(key)
+
+        rootOpt != null
+        rootOpt instanceof Some
+
+        final JsonObject root = rootOpt.get()
+        root.get("nullProp") instanceof JsonNull
+
     }
 
 }

@@ -8,32 +8,31 @@ import java.util
 
 import com.google.appengine.api.datastore.KeyFactory.stringToKey
 import com.google.appengine.api.datastore.KeyFactory.keyToString
-import collection.immutable
 
 class JemCollection(val cfg: JemConfiguration) {
 
   type EntityKeyString = String
 
-  private type FieldSetter[Src, Dst] = (Src, Dst, String) => Unit
+  private type PropertySetter[Src, Dst] = (Src, Dst, String) => Unit
 
-  private val indexedProps = cfg.indexedProps
+  private val indexedProps = cfg.indexedProps.toSet
   private val idProp = cfg.idProp
   private val parent = cfg.parent
   private val kind = cfg.kind
 
   private val gson = new Gson
 
-  private val jsonSetter = (source: Entity, dest: JsonObject, propName: String) =>
+  private val setJsonProperty = (source: Entity, dest: JsonObject, propName: String) =>
     dest.add(propName, getJsonProperty(source.getProperty(propName)))
 
-  private val entitySetter = (source: JsonObject, dest: Entity, propName: String) =>
-    if (indexedProps.contains(propName)) {
+  private val setEntityProperty = (source: JsonObject, dest: Entity, propName: String) =>
+    if (kind == dest.getKind && indexedProps.contains(propName)) {
       dest.setProperty(propName, getEntityProperty(dest, source.get(propName)))
     } else {
       dest.setUnindexedProperty(propName, getEntityProperty(dest, source.get(propName)))
     }
 
-  def add(jsonObj: JsonObject): EntityKeyString = store(jsonObj, kind, parent)
+  def store(jsonObj: JsonObject): EntityKeyString = store(jsonObj, kind, parent)
 
   private def store(jsonObj: JsonObject, kind: String, parent: Key): EntityKeyString = {
     val entity = jsonObj.get(idProp) match {
@@ -62,47 +61,38 @@ class JemCollection(val cfg: JemConfiguration) {
     dataStore.delete(stringToKey(key))
   }
 
-  def getEntityByKey(key: EntityKeyString) = dataStore.get(stringToKey(key))
+  private def getEntityByKey(key: EntityKeyString) = dataStore.get(stringToKey(key))
 
   private def dataStore = DatastoreServiceFactory.getDatastoreService
 
-  private def copyProperties[Src, Dst](setter: FieldSetter[Src, Dst], src: Src, dst: Dst, names: TraversableOnce[String]) =
-    names.foldLeft(dst) {
-      (dst: Dst, name: String) => {
-        setter(src, dst, name)
-        dst
-      }
-    }
+  private def copyProperties[Src, Dst](setProperty: PropertySetter[Src, Dst], src: Src, dst: Dst, names: TraversableOnce[String]) =
+    CollectionUtils.fill(dst, names, (d: Dst, e: String) => setProperty(src, d, e) )
 
   private def copyEntityProperties(src: Entity) =
-    copyProperties[Entity, JsonObject](jsonSetter, src, new JsonObject, src.getProperties.keySet)
+    copyProperties[Entity, JsonObject](setJsonProperty, src, new JsonObject, src.getProperties.keySet)
 
   private def copyJsonProperties(src: JsonObject, dst: Entity) =
-    copyProperties[JsonObject, Entity](entitySetter, src, dst, src.entrySet().map(_.getKey))
+    copyProperties[JsonObject, Entity](setEntityProperty, src, dst, src.entrySet().map(_.getKey))
 
   private def getEntityProperty(parent: Entity, value: JsonElement): AnyRef = value match {
     case v: JsonNull => null
     case v: JsonPrimitive => v.getAsString
-    case v: JsonObject => stringToKey(store(v, parent.getKind + ".inner", parent.getKey)) // TODO: add test
+    case v: JsonObject => stringToKey(store(v, kind + ".inner", parent.getKey))
     case v: JsonArray => bufferAsJavaList(v.getAsJsonArray.iterator().map(getEntityProperty(parent, _)).toBuffer)
 
     case _ => throw new IllegalArgumentException("Unsupported value: " + value)
   }
 
   private def getJsonProperty(value: AnyRef): JsonElement = value match {
-    case v: AnyRef if v eq null => JsonNull.INSTANCE // TODO: add test
+    case v if v == null => JsonNull.INSTANCE
     case v: String => new JsonPrimitive(v)
     case v: Key => load(keyToString(v)) match {
       case Some(element) => element
-      case None => JsonNull.INSTANCE // TODO: consistency problem?
+      case None => JsonNull.INSTANCE
     }
-    case v: util.Collection[AnyRef] => {
-      val res = new JsonArray
-      v.map(getJsonProperty).foreach {
-        res.add(_)
-      }
-      res
-    }
+    case v: util.Collection[AnyRef] => CollectionUtils.fill(new JsonArray, v.map(getJsonProperty),
+      (c: JsonArray, e: JsonElement) => c.add(e)
+    )
 
     case _ => throw new IllegalArgumentException("Unsupported value: " + value)
   }

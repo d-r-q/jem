@@ -4,6 +4,7 @@ import junit.framework.TestCase
 import com.google.appengine.tools.development.testing.{LocalDatastoreServiceTestConfig, LocalServiceTestHelper}
 
 import ru.jdev.jem.JemCollectionFactory.collectionFor
+import com.google.gson.JsonObject
 
 class JemUsageTest extends TestCase {
 
@@ -15,11 +16,11 @@ class JemUsageTest extends TestCase {
 
   def testUsage() {
     val users = collectionFor("User", Set()).withoutParent
-    val userKey = users.add(null)
+    val userKey = users.store(new JsonObject)
 
     val posts = collectionFor("Post", Set())
     val userPosts = posts.withParent(userKey)
-    userPosts
+    userPosts.store(new JsonObject)
   }
 
   override def tearDown() {
