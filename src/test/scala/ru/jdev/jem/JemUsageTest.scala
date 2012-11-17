@@ -3,7 +3,7 @@ package ru.jdev.jem
 import junit.framework.TestCase
 import com.google.appengine.tools.development.testing.{LocalDatastoreServiceTestConfig, LocalServiceTestHelper}
 
-import ru.jdev.jem.JemFactoryBuilder.createFactoryFor
+import ru.jdev.jem.JemCollectionFactory.collectionFor
 
 class JemUsageTest extends TestCase {
 
@@ -14,12 +14,11 @@ class JemUsageTest extends TestCase {
   }
 
   def testUsage() {
-    val usersFactory = createFactoryFor("User", Set())
-    val users = usersFactory.withoutParent
-    val userKey = users.store(null)
+    val users = collectionFor("User", Set()).withoutParent
+    val userKey = users.add(null)
 
-    val userPostsFactory = createFactoryFor("Post", Set())
-    val userPosts = userPostsFactory.withParent(userKey)
+    val posts = collectionFor("Post", Set())
+    val userPosts = posts.withParent(userKey)
     userPosts
   }
 
