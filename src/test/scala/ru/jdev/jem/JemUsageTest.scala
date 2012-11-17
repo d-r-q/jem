@@ -1,9 +1,9 @@
 package ru.jdev.jem
 
 import junit.framework.TestCase
-import com.google.gson.JsonParser
-import org.junit.Assert
 import com.google.appengine.tools.development.testing.{LocalDatastoreServiceTestConfig, LocalServiceTestHelper}
+
+import ru.jdev.jem.JemFactoryBuilder.createFactoryFor
 
 class JemUsageTest extends TestCase {
 
@@ -14,16 +14,13 @@ class JemUsageTest extends TestCase {
   }
 
   def testUsage() {
-    val roots = Jem2.factoryFor("Test root", Set("indexed"))()
-    val rootKey = roots.store(null)
+    val usersFactory = createFactoryFor("User", Set())
+    val users = usersFactory.withoutParent
+    val userKey = users.store(null)
 
-    val childrenFactory = Jem2.factoryFor("Test child", Set("indexed"))
-    val rootChildren = childrenFactory(rootKey)
-
-    val childKey = rootChildren.store(null)
-
-    rootChildren.delete(childKey)
-
+    val userPostsFactory = createFactoryFor("Post", Set())
+    val userPosts = userPostsFactory.withParent(userKey)
+    userPosts
   }
 
   override def tearDown() {

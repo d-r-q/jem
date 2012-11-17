@@ -16,7 +16,7 @@ class Jem2(val cfg: JemConfiguration) {
 
   private val gson = new Gson
 
-  private val (entitySetters, jsonSetters) = {
+  private val entitySetters = {
     val entityUnindexedSetter =
       (source: JsonObject, dest: Entity, key: String) =>
         dest.setUnindexedProperty(key, getEntityProperty(source.get(key)))
@@ -25,13 +25,12 @@ class Jem2(val cfg: JemConfiguration) {
       (source: JsonObject, dest: Entity, key: String) =>
         dest.setProperty(key, getEntityProperty(source.get(key)))
 
-    val jsonSetter =
-      (source: Entity, dest: JsonObject, key: String) =>
-        dest.add(key, getJsonProperty(source.getProperty(key)))
-
-    (cfg.indexedFields.zip(Stream.continually(entityIndexedSetter)).toMap.withDefaultValue(entityUnindexedSetter),
-      immutable.Map[String, FieldSetter[Entity, JsonObject]]().withDefaultValue(jsonSetter))
+    cfg.indexedFields.zip(Stream.continually(entityIndexedSetter)).toMap.withDefaultValue(entityUnindexedSetter)
   }
+
+  private val jsonSetters = immutable.Map[String, FieldSetter[Entity, JsonObject]]().withDefaultValue(
+    (source: Entity, dest: JsonObject, key: String) => dest.add(key, getJsonProperty(source.getProperty(key)))
+  )
 
   def store(jsonObj: JsonObject): String = {
     val entity = jsonObj.get(cfg.idField) match {
@@ -52,7 +51,9 @@ class Jem2(val cfg: JemConfiguration) {
     case null => None
   }
 
-  def load(query: Query): Iterable[JsonObject] = dataStore.prepare(query).asIterable map(copyEntityProperties(_))
+  def load(query: Query): Iterable[JsonObject] = dataStore.prepare(query).asIterable.map(copyEntityProperties(_))
+
+  def loadAll = dataStore.prepare(new Query(cfg.kind, cfg.parent)).asIterable().map(copyEntityProperties(_))
 
   def delete(key: String) {
     dataStore.delete(stringToKey(key))
@@ -102,11 +103,5 @@ class Jem2(val cfg: JemConfiguration) {
 
     case _ => throw new IllegalArgumentException("Unsupported value: " + value)
   }
-
-}
-
-object Jem2 {
-
-  def factoryFor(kind: String, indexedFields: Iterable[String])(parent: String = null): Jem2 = new Jem2(new JemConfiguration(indexedFields, kind, stringToKey(parent)))
 
 }
