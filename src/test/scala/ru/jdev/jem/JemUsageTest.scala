@@ -15,12 +15,18 @@ class JemUsageTest extends TestCase {
   }
 
   def testUsage() {
-    val users = collectionFor("User", Set()).withoutParent
-    val userKey = users.store(new JsonObject)
+    val usersConfig = Set()
+    val newUser: JsonObject = new JsonObject
+    val postsConfig: Set[Nothing] = Set()
 
-    val posts = collectionFor("Post", Set())
+
+    val users = collectionFor("User", usersConfig).withoutParent
+    val userKey = users.store(newUser)
+
+    val posts = collectionFor("Post", postsConfig)
     val userPosts = posts.withParent(userKey)
-    userPosts.store(new JsonObject)
+    val newPost: JsonObject = new JsonObject
+    userPosts.store(newPost)
   }
 
   override def tearDown() {
